@@ -24,26 +24,60 @@ export default class User extends Component {
   static propTypes = {
     navigation: Proptypes.shape({
       getParam: Proptypes.func,
+      navigate: Proptypes.func,
     }).isRequired,
   };
 
   state = {
     stars: [],
-    loading: false,
+    loading: true,
+    page: 1,
+    refreshing: false,
   };
 
   async componentDidMount() {
-    const { navigation } = this.props;
-    const user = navigation.getParam('user');
-    this.setState({ loading: true });
-
-    const response = await api.get(`/users/${user.login}/starred`);
-    this.setState({ stars: response.data, loading: false });
+    this.load();
   }
+
+  load = async (page = 1) => {
+    const { stars } = this.state;
+    const { navigation } = this.props;
+
+    const user = navigation.getParam('user');
+
+    const response = await api.get(`/users/${user.login}/starred`, {
+      params: {
+        page,
+      },
+    });
+
+    this.setState({
+      stars: page >= 2 ? [...stars, ...response.data] : response.data,
+      loading: false,
+      refreshing: false,
+      page,
+    });
+  };
+
+  loadMore = () => {
+    const { page } = this.state;
+    const nextPage = page + 1;
+    this.load(nextPage);
+  };
+
+  refreshList = () => {
+    this.setState({ refreshing: true, stars: [] }, this.load);
+  };
+
+  handleNavigate = repository => {
+    const { navigation } = this.props;
+    console.tron.log('repository');
+    navigation.navigate('Repository', { repository });
+  };
 
   render() {
     const { navigation } = this.props;
-    const { stars, loading } = this.state;
+    const { stars, loading, refreshing } = this.state;
     const user = navigation.getParam('user');
     return (
       <Container>
@@ -58,8 +92,12 @@ export default class User extends Component {
           <Stars
             data={stars}
             keyExtractor={star => String(star.id)}
+            onEndReachedThreshold={0.2}
+            onEndReached={this.loadMore}
+            onRefresh={this.refreshList}
+            refreshing={refreshing}
             renderItem={({ item }) => (
-              <Starred>
+              <Starred onPress={() => this.handleNavigate(item)}>
                 <OwnerAvatar source={{ uri: item.owner.avatar_url }} />
                 <Info>
                   <Title>{item.name}</Title>
